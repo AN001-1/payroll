@@ -1,0 +1,23 @@
+{
+  "name": "maison-rotterdam-payroll",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node --experimental-sqlite --watch server/index.js",
+    "start": "node --experimental-sqlite server/index.js",
+    "test": "node --experimental-sqlite --test"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "express-session": "^1.18.2",
+    "helmet": "^8.1.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.1.4"
+  }
+}
