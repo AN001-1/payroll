@@ -470,7 +470,7 @@ export function createApp({ db, config, smsSender = sendSms }) {
   app.get(['/app.js', '/styles.css'], (request, response) => {
     response.sendFile(join(rootDirectory, request.path.slice(1)));
   });
-  app.get('/reset-password', (_request, response) => response.sendFile(join(rootDirectory, 'index.html')));
+  app.get(['/reset-password', '/profile'], (_request, response) => response.sendFile(join(rootDirectory, 'index.html')));
   app.use('/assets', express.static(join(rootDirectory, 'assets'), { dotfiles: 'deny', fallthrough: false, maxAge: '7d' }));
   app.use('/api', (_request, response) => response.status(404).json({ error: 'API route not found.' }));
   app.use((error, _request, response, _next) => {

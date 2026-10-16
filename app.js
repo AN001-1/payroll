@@ -254,7 +254,7 @@ function renderHome() {
     .map((item) => `<span>${item}</span>`).join('');
   app.innerHTML = `<main class="home-page">
     <header class="home-header">
-      <a class="home-brand" href="/" aria-label="Maison Rotterdam home"><span class="brand-mark">M</span><span>MAISON ROTTERDAM<small>HANDCRAFTED PATISSERIE</small></span></a>
+      <a class="home-brand" href="/" aria-label="Maison Rotterdam home"><img class="brand-logo" src="/assets/logo.svg?v=2" alt="" width="414" height="394" /><span>MAISON ROTTERDAM<small>HANDCRAFTED PATISSERIE</small></span></a>
       <button class="staff-access" type="button" data-staff-access aria-label="Open staff sign in" title="Staff sign in">Staff access <span aria-hidden="true">↗</span></button>
     </header>
     <section class="home-hero" aria-labelledby="home-title">
@@ -301,7 +301,7 @@ function renderSignIn() {
   app.innerHTML = `
     <main class="login-page">
       <section class="login-story">
-        <div class="brand"><span class="brand-mark">M</span><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></div>
+        <div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home"><img class="brand-logo" src="/assets/logo.svg?v=2" alt="" width="414" height="394" /><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a></div>
         <div class="story-copy">
           <span class="eyebrow">Patisserie staff workspace</span>
           <h1>The team behind every bake.</h1>
@@ -356,7 +356,7 @@ function renderSignIn() {
 
 function renderPasswordReset(token) {
   app.innerHTML = `<main class="login-page">
-    <section class="login-story"><div class="brand"><span class="brand-mark">M</span><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></div><div class="story-copy"><span class="eyebrow">Patisserie staff access</span><h1>Set a new password.</h1><p>Choose a private password for your staff account.</p></div><div class="story-foot">Password reset links expire after 10 minutes.</div></section>
+    <section class="login-story"><div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home"><img class="brand-logo" src="/assets/logo.svg?v=2" alt="" width="414" height="394" /><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a></div><div class="story-copy"><span class="eyebrow">Patisserie staff access</span><h1>Set a new password.</h1><p>Choose a private password for your staff account.</p></div><div class="story-foot">Password reset links expire after 10 minutes.</div></section>
     <section class="login-panel"><div class="login-card"><span class="eyebrow">Password reset</span><h2>Choose a password.</h2><p>Your administrator will not see the password you enter.</p>
       <form id="password-reset-form"><div class="field"><label for="new-password">New password</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /></div>
       <div class="field"><label for="confirm-password">Confirm password</label><input id="confirm-password" name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /></div>
@@ -394,11 +394,11 @@ function sidebar() {
     : [['payslip', 'payslip', 'My payslip'], ['history', 'history', 'Payment history'], ['profile', 'profile', 'My details']];
   const currentNavView = activeView === 'employeeDetails' ? 'people' : activeView;
   return `<aside class="sidebar">
-    <div class="brand"><span class="brand-mark">M</span><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span><button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-label="Open navigation menu" aria-controls="main-navigation" aria-expanded="false"><span></span><span></span><span></span></button></div>
+    <div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home"><img class="brand-logo" src="/assets/logo.svg?v=2" alt="" width="414" height="394" /><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a><button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-label="Open navigation menu" aria-controls="main-navigation" aria-expanded="false"><span></span><span></span><span></span></button></div>
     <div class="company-label">Patisserie staff</div>
     <nav class="side-nav" id="main-navigation" aria-label="Main navigation">${items.map(([view, iconName, label]) => `<button class="nav-button ${currentNavView === view ? 'active' : ''}" data-view="${view}" type="button"${currentNavView === view ? ' aria-current="page"' : ''}><span class="nav-icon">${icon(iconName)}</span>${label}</button>`).join('')}</nav>
     <div class="sidebar-bottom">
-      <div class="sidebar-user"><span class="avatar" aria-hidden="true">${escapeHtml(initials(currentUser.name))}</span><div class="sidebar-user-text"><strong>${escapeHtml(currentUser.name)}</strong><span>${currentUser.role === 'admin' ? 'Payroll admin' : 'Employee'}</span></div><button class="sidebar-logout" type="button" data-logout aria-label="Sign out" title="Sign out">${icon('logout')}</button></div>
+      <div class="sidebar-user"><a class="sidebar-profile-link" href="/profile" data-view="profile" aria-label="View your profile" title="View your profile"${activeView === 'profile' ? ' aria-current="page"' : ''}><span class="avatar" aria-hidden="true">${escapeHtml(initials(currentUser.name))}</span></a><div class="sidebar-user-text"><strong>${escapeHtml(currentUser.name)}</strong><span>${currentUser.role === 'admin' ? 'Payroll admin' : 'Employee'}</span></div><button class="sidebar-logout" type="button" data-logout aria-label="Sign out" title="Sign out">${icon('logout')}</button></div>
     </div>
   </aside>`;
 }
@@ -1163,7 +1163,11 @@ function renderApp() {
   if (viewChanged) window.scrollTo({ top: 0, behavior: 'instant' });
   if (isNewView) animateCounters();
   document.querySelector('[data-theme-toggle]')?.addEventListener('click', toggleTheme);
-  document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', async () => {
+  document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', async (event) => {
+    if (button.tagName === 'A') {
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+    }
     activeView = button.dataset.view;
     employeeSearch = '';
     if (activeView === 'attendance') {
@@ -1329,6 +1333,10 @@ async function initializeApp() {
     const result = await api('/api/me');
     currentUser = result.user;
     activeView = currentUser.role === 'admin' ? 'overview' : 'payslip';
+    if (window.location.pathname === '/profile') {
+      activeView = 'profile';
+      history.replaceState({}, '', '/');
+    }
     await loadEmployees();
     await loadPaymentHistory();
     renderApp();
