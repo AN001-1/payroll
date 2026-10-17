@@ -37,6 +37,17 @@ export function ensureAttendanceAbsenceReason(db) {
   }
 }
 
+export function ensureEmployeeStatus(db) {
+  const columns = db.prepare('PRAGMA table_info(employees)').all();
+  if (!columns.some((column) => column.name === 'inactive_since')) {
+    db.exec('ALTER TABLE employees ADD COLUMN inactive_since TEXT');
+  }
+}
+
+export function isActiveOn(inactiveSince, date) {
+  return !inactiveSince || date < inactiveSince;
+}
+
 export async function initializeDatabase(db, config) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -90,6 +101,7 @@ export async function initializeDatabase(db, config) {
   `);
   ensurePaymentHistoryStatus(db);
   ensureAttendanceAbsenceReason(db);
+  ensureEmployeeStatus(db);
   await seedAdmin(db, config);
 }
 
@@ -126,7 +138,7 @@ export function employeeRows(db, userId = null) {
   const query = `SELECT e.id, e.name, e.title AS role, e.department, e.start_date AS startDate,
       e.daily_rate AS dailyRate, e.paid_days AS paidDays,
       CAST(ROUND(e.daily_rate * e.paid_days) AS INTEGER) AS gross,
-      e.avance, e.color, u.id AS userId, u.username, u.email, u.phone,
+      e.avance, e.color, e.inactive_since AS inactiveSince, u.id AS userId, u.username, u.email, u.phone,
       u.phone_login AS phoneLogin, (u.password_hash IS NOT NULL) AS hasPassword
     FROM employees e JOIN users u ON u.id = e.user_id`;
   const rows = userId
@@ -134,6 +146,7 @@ export function employeeRows(db, userId = null) {
     : db.prepare(`${query} ORDER BY e.name COLLATE NOCASE`).all();
   return rows.map(({ userId: accountId, phoneLogin, ...row }) => ({
     ...row,
+    active: isActiveOn(row.inactiveSince, new Date().toISOString().slice(0, 10)),
     hasPassword: Boolean(row.hasPassword),
     phone: row.phone || '',
     username: row.username || row.email || phoneLogin || '',

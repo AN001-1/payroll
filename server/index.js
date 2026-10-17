@@ -6,7 +6,7 @@ import express from 'express';
 import session from 'express-session';
 import helmet from 'helmet';
 import { rateLimit } from 'express-rate-limit';
-import { clearResetTokens, employeeRows, ensureAttendanceAbsenceReason, ensurePaymentHistoryStatus, hashResetToken, openDatabase, initializeDatabase, transaction, userByLogin } from './database.js';
+import { clearResetTokens, employeeRows, ensureAttendanceAbsenceReason, ensureEmployeeStatus, ensurePaymentHistoryStatus, hashResetToken, isActiveOn, openDatabase, initializeDatabase, transaction, userByLogin } from './database.js';
 import { hashPassword, normalizePhone, verifyPassword } from './security.js';
 import { SQLiteSessionStore } from './session-store.js';
 
@@ -143,6 +143,7 @@ function installSchema(db) {
   `);
   ensurePaymentHistoryStatus(db);
   ensureAttendanceAbsenceReason(db);
+  ensureEmployeeStatus(db);
 }
 
 export function createApp({ db, config, smsSender = sendSms }) {
@@ -278,11 +279,17 @@ export function createApp({ db, config, smsSender = sendSms }) {
   app.get('/api/attendance', authenticated, adminOnly, (request, response) => {
     const workDate = String(request.query.date || '');
     if (!validIsoDate(workDate)) return response.status(400).json({ error: 'Choose a valid attendance date.' });
+    const statusFilter = String(request.query.status || 'all');
+    if (!['all', 'active', 'inactive'].includes(statusFilter)) {
+      return response.status(400).json({ error: 'Choose a valid employee status filter.' });
+    }
     const attendance = db.prepare(`SELECT e.id AS employeeId, e.name, e.title AS role,
-      e.department, e.color, a.status, a.absence_reason AS absenceReason
+      e.department, e.color, e.inactive_since AS inactiveSince, a.status, a.absence_reason AS absenceReason
       FROM employees e LEFT JOIN attendance_records a
         ON a.employee_id = e.id AND a.work_date = ?
-      ORDER BY e.name COLLATE NOCASE`).all(workDate);
+      ORDER BY e.name COLLATE NOCASE`).all(workDate)
+      .map((row) => ({ ...row, active: isActiveOn(row.inactiveSince, workDate) }))
+      .filter((row) => statusFilter === 'all' || (statusFilter === 'active') === row.active);
     const monthAttendance = db.prepare(`SELECT employee_id AS employeeId, work_date AS date, status
       FROM attendance_records WHERE substr(work_date, 1, 7) = ?`).all(workDate.slice(0, 7));
     response.json({ date: workDate, attendance, monthAttendance });
@@ -298,8 +305,11 @@ export function createApp({ db, config, smsSender = sendSms }) {
     if (typeof absenceReason !== 'string' || absenceReason.length > 200) {
       return response.status(400).json({ error: 'Absence reason must be 200 characters or fewer.' });
     }
-    const employee = db.prepare('SELECT id FROM employees WHERE id = ?').get(employeeId);
+    const employee = db.prepare('SELECT id, inactive_since AS inactiveSince FROM employees WHERE id = ?').get(employeeId);
     if (!employee) return response.status(404).json({ error: 'Employee not found.' });
+    if (!isActiveOn(employee.inactiveSince, date)) {
+      return response.status(409).json({ error: 'This employee is inactive from that date, so attendance is no longer required.' });
+    }
     const savedReason = status === 'absent' ? absenceReason.trim() : '';
     db.prepare(`INSERT INTO attendance_records (employee_id, work_date, status, absence_reason, updated_at)
       VALUES (?, ?, ?, ?, ?)
@@ -421,6 +431,17 @@ export function createApp({ db, config, smsSender = sendSms }) {
       if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') return response.status(409).json({ error: 'That phone number is already assigned to another employee.' });
       throw error;
     }
+  });
+
+  app.put('/api/employees/:id/status', authenticated, adminOnly, (request, response) => {
+    const { active, inactiveSince } = request.body || {};
+    if (typeof active !== 'boolean') return response.status(400).json({ error: 'Choose Active or Inactive.' });
+    const since = active ? null : String(inactiveSince || new Date().toISOString().slice(0, 10));
+    if (since && !validIsoDate(since)) return response.status(400).json({ error: 'Enter a valid inactive-from date.' });
+    const result = db.prepare('UPDATE employees SET inactive_since = ? WHERE id = ?').run(since, request.params.id);
+    if (!result.changes) return response.status(404).json({ error: 'Employee not found.' });
+    const employee = employeeRows(db).find((person) => person.id === request.params.id);
+    response.json({ employee: normalizeEmployee(employee) });
   });
 
   app.delete('/api/employees/:id', authenticated, adminOnly, (request, response) => {

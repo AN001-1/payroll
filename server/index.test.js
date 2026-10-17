@@ -342,6 +342,33 @@ test('lets admins add historical payment records and rejects invalid or duplicat
   assert.equal(saved.status, 'unpaid');
 });
 
+test('archiving an employee stops attendance from the inactive date but keeps past records', async () => {
+  const origin = (req) => req.set('Host', '127.0.0.1').set('Origin', 'http://127.0.0.1');
+  const putStatus = (agent, body) => origin(agent.put('/api/employees/TEST-001/status')).send(body);
+  await origin(admin.put('/api/attendance/TEST-001/2026-10-07')).send({ status: 'present' });
+  assert.equal((await putStatus(employee, { active: false })).status, 403);
+  assert.equal((await putStatus(admin, { active: 'no' })).status, 400);
+  assert.equal((await putStatus(admin, { active: false, inactiveSince: '2026-13-40' })).status, 400);
+  const archived = await putStatus(admin, { active: false, inactiveSince: '2026-10-10' });
+  assert.equal(archived.status, 200);
+  assert.equal(archived.body.employee.inactiveSince, '2026-10-10');
+  assert.equal(archived.body.employee.active, false);
+  assert.equal((await origin(admin.put('/api/attendance/TEST-001/2026-10-10')).send({ status: 'present' })).status, 409);
+  assert.equal((await origin(admin.put('/api/attendance/TEST-001/2026-10-08')).send({ status: 'absent' })).status, 200);
+  const before = await admin.get('/api/attendance?date=2026-10-07&status=active');
+  assert.ok(before.body.attendance.some((row) => row.employeeId === 'TEST-001' && row.status === 'present' && row.active));
+  const after = await admin.get('/api/attendance?date=2026-10-12&status=active');
+  assert.ok(!after.body.attendance.some((row) => row.employeeId === 'TEST-001'));
+  const inactiveOnly = await admin.get('/api/attendance?date=2026-10-12&status=inactive');
+  assert.deepEqual(inactiveOnly.body.attendance.map((row) => row.employeeId), ['TEST-001']);
+  assert.equal((await admin.get('/api/attendance?date=2026-10-12&status=bogus')).status, 400);
+  const history = await admin.get('/api/payment-history');
+  assert.ok(history.body.payments.some((payment) => payment.employeeId === 'TEST-001'));
+  const restored = await putStatus(admin, { active: true });
+  assert.equal(restored.body.employee.active, true);
+  assert.equal(restored.body.employee.inactiveSince, null);
+});
+
 test('dev quick login is off by default, never in production, and only for the local machine', async () => {
   const origin = (req) => req.set('Host', '127.0.0.1').set('Origin', 'http://127.0.0.1');
   assert.equal((await origin(request(app).post('/api/dev-login')).send({})).status, 404);

@@ -1,4 +1,5 @@
 const app = document.querySelector('#app');
+let logoMarkup = '';
 let currentUser = null;
 let currentEmployee = null;
 let employees = [];
@@ -7,6 +8,7 @@ let attendanceByMonth = [];
 let attendanceRecords = [];
 let attendanceMonthRecords = [];
 let attendanceDate = dateInputValue(new Date());
+let attendanceStatusFilter = 'active';
 let attendanceError = '';
 let activeView = 'overview';
 let selectedEmployeeId = '';
@@ -133,7 +135,7 @@ async function loadPaymentHistory() {
 }
 
 async function loadAttendance() {
-  const result = await api(`/api/attendance?date=${encodeURIComponent(attendanceDate)}`);
+  const result = await api(`/api/attendance?date=${encodeURIComponent(attendanceDate)}&status=${attendanceStatusFilter}`);
   attendanceRecords = result.attendance;
   attendanceMonthRecords = result.monthAttendance || [];
   attendanceError = '';
@@ -183,9 +185,23 @@ function payrollRecordsForMonth() {
         payrollMonth,
       };
     }
+    if (person.inactiveSince && person.inactiveSince.slice(0, 7) < payrollMonth) return null;
     return { ...person, paidDays: null, gross: null, avance: 0, source: 'missing', payrollMonth };
-  });
+  }).filter(Boolean);
 }
+
+async function loadLogo() {
+  try {
+    const response = await fetch('/assets/logo.svg?v=3');
+    if (!response.ok) return;
+    logoMarkup = (await response.text()).replace(/<\?xml[^>]*\?>\s*/, '')
+      .replace('<svg ', '<svg class="brand-logo" aria-hidden="true" focusable="false" ');
+  } catch {
+    logoMarkup = '';
+  }
+}
+
+const brandLogo = () => logoMarkup || '<img class="brand-logo" src="/assets/logo.svg?v=3" alt="" width="414" height="394" />';
 
 function escapeHtml(value) {
   const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -198,9 +214,10 @@ const money = (amount) => new Intl.NumberFormat('fr-MA', {
 const moneyPrecise = (amount) => new Intl.NumberFormat('fr-MA', {
   style: 'currency', currency: 'MAD', minimumFractionDigits: 2, maximumFractionDigits: 2,
 }).format(amount);
-const totalPayroll = () => employees.reduce((sum, person) => sum + netPay(person), 0);
-const averagePay = () => employees.length ? Math.round(totalPayroll() / employees.length) : 0;
-const departmentCount = () => new Set(employees.map((person) => person.department)).size;
+const activeEmployees = () => employees.filter((person) => person.active !== false);
+const totalPayroll = () => activeEmployees().reduce((sum, person) => sum + netPay(person), 0);
+const averagePay = () => activeEmployees().length ? Math.round(totalPayroll() / activeEmployees().length) : 0;
+const departmentCount = () => new Set(activeEmployees().map((person) => person.department)).size;
 const initials = (name) => name.split(' ').map((part) => part[0]).slice(0, 2).join('');
 const localMoroccoPhone = (phone) => String(phone || '').replace(/\D/g, '').replace(/^212/, '').replace(/^0/, '');
 const moroccoPhone = (phone) => `+212${String(phone || '').replace(/\D/g, '').replace(/^0/, '')}`;
@@ -254,7 +271,7 @@ function renderHome() {
     .map((item) => `<span>${item}</span>`).join('');
   app.innerHTML = `<main class="home-page">
     <header class="home-header">
-      <a class="home-brand" href="/" aria-label="Maison Rotterdam home"><img class="brand-logo" src="/assets/logo.svg?v=2" alt="" width="414" height="394" /><span>MAISON ROTTERDAM<small>HANDCRAFTED PATISSERIE</small></span></a>
+      <a class="home-brand" href="/" aria-label="Maison Rotterdam home">${brandLogo()}<span>MAISON ROTTERDAM<small>HANDCRAFTED PATISSERIE</small></span></a>
       <button class="staff-access" type="button" data-staff-access aria-label="Open staff sign in" title="Staff sign in">Staff access <span aria-hidden="true">↗</span></button>
     </header>
     <section class="home-hero" aria-labelledby="home-title">
@@ -301,7 +318,7 @@ function renderSignIn() {
   app.innerHTML = `
     <main class="login-page">
       <section class="login-story">
-        <div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home"><img class="brand-logo" src="/assets/logo.svg?v=2" alt="" width="414" height="394" /><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a></div>
+        <div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home">${brandLogo()}<span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a></div>
         <div class="story-copy">
           <span class="eyebrow">Patisserie staff workspace</span>
           <h1>The team behind every bake.</h1>
@@ -356,7 +373,7 @@ function renderSignIn() {
 
 function renderPasswordReset(token) {
   app.innerHTML = `<main class="login-page">
-    <section class="login-story"><div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home"><img class="brand-logo" src="/assets/logo.svg?v=2" alt="" width="414" height="394" /><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a></div><div class="story-copy"><span class="eyebrow">Patisserie staff access</span><h1>Set a new password.</h1><p>Choose a private password for your staff account.</p></div><div class="story-foot">Password reset links expire after 10 minutes.</div></section>
+    <section class="login-story"><div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home">${brandLogo()}<span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a></div><div class="story-copy"><span class="eyebrow">Patisserie staff access</span><h1>Set a new password.</h1><p>Choose a private password for your staff account.</p></div><div class="story-foot">Password reset links expire after 10 minutes.</div></section>
     <section class="login-panel"><div class="login-card"><span class="eyebrow">Password reset</span><h2>Choose a password.</h2><p>Your administrator will not see the password you enter.</p>
       <form id="password-reset-form"><div class="field"><label for="new-password">New password</label><input id="new-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /></div>
       <div class="field"><label for="confirm-password">Confirm password</label><input id="confirm-password" name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="128" required /></div>
@@ -394,7 +411,7 @@ function sidebar() {
     : [['payslip', 'payslip', 'My payslip'], ['history', 'history', 'Payment history'], ['profile', 'profile', 'My details']];
   const currentNavView = activeView === 'employeeDetails' ? 'people' : activeView;
   return `<aside class="sidebar">
-    <div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home"><img class="brand-logo" src="/assets/logo.svg?v=2" alt="" width="414" height="394" /><span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a><button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-label="Open navigation menu" aria-controls="main-navigation" aria-expanded="false"><span></span><span></span><span></span></button></div>
+    <div class="brand"><a class="brand-link" href="/" aria-label="Maison Rotterdam home">${brandLogo()}<span>MAISON ROTTERDAM<small class="brand-category">HANDCRAFTED PATISSERIE</small></span></a><button class="mobile-menu-toggle" type="button" data-mobile-menu-toggle aria-label="Open navigation menu" aria-controls="main-navigation" aria-expanded="false"><span></span><span></span><span></span></button></div>
     <div class="company-label">Patisserie staff</div>
     <nav class="side-nav" id="main-navigation" aria-label="Main navigation">${items.map(([view, iconName, label]) => `<button class="nav-button ${currentNavView === view ? 'active' : ''}" data-view="${view}" type="button"${currentNavView === view ? ' aria-current="page"' : ''}><span class="nav-icon">${icon(iconName)}</span>${label}</button>`).join('')}</nav>
     <div class="sidebar-bottom">
@@ -448,13 +465,13 @@ function employeeTable(rows, showActions = true, showUsername = false) {
   if (!rows.length) return '<div class="empty-state">No employees match that search.</div>';
   const resetAction = 'Send password reset';
   return `<div class="table-wrap"><table><thead><tr><th>Employee</th>${showUsername ? '<th>Username</th>' : ''}<th>Department</th><th>Gross pay</th><th>Net pay</th>${showUsername ? '<th>Account</th>' : '<th>Status</th>'}${showActions ? '<th></th>' : ''}</tr></thead><tbody>${rows.map((person) => `<tr ${employeeRowDetailsAttributes(person.id, person.name)}>
-    <td><div class="person-cell"><span class="avatar" style="background:${person.color}">${escapeHtml(initials(person.name))}</span><div>${employeeNameLink(person.id, person.name)}<small>${escapeHtml(person.role)}</small></div></div></td>
+    <td><div class="person-cell"><span class="avatar" style="background:${person.color}">${escapeHtml(initials(person.name))}</span><div>${employeeNameLink(person.id, person.name)}<small>${escapeHtml(person.role)}${person.active === false ? ` · Inactive since ${escapeHtml(displayDate(person.inactiveSince))}` : ''}</small></div></div></td>
     ${showUsername ? `<td><span class="username-cell">${escapeHtml(person.username || 'Not set')}</span></td>` : ''}<td>${escapeHtml(person.department)}</td><td class="money">${money(person.gross)}</td><td class="money"><strong>${money(netPay(person))}</strong></td><td><span class="status ${person.hasPassword ? '' : 'status-pending'}">${showUsername ? (person.hasPassword ? 'Password set' : 'Setup needed') : 'Ready'}</span></td>${showActions ? `<td><div class="employee-actions"><button class="row-action" type="button" data-edit-person="${escapeHtml(person.id)}">Edit</button>${showUsername ? `<button class="row-action" type="button" data-reset-password="${escapeHtml(person.id)}" ${person.phone ? '' : 'disabled'}>${resetAction}</button><button class="row-action danger" type="button" data-delete-person="${escapeHtml(person.id)}">Delete</button>` : ''}</div></td>` : ''}
   </tr>`).join('')}</tbody></table></div>`;
 }
 
 function overview() {
-  const recent = employees.slice(0, 4);
+  const recent = activeEmployees().slice(0, 4);
   const monthly = [...new Set(paymentHistory.map((payment) => payment.month))].sort().slice(-6).map((month) => ({
     month,
     total: paymentHistory.filter((payment) => payment.month === month).reduce((sum, payment) => sum + payment.net, 0),
@@ -463,14 +480,14 @@ function overview() {
   return `${pageHead('Payroll overview', 'A clear picture of this month’s people costs.', '<button class="secondary-button" type="button" data-view="payroll">View payroll run →</button>')}
     ${illustrativeBanner()}
     <section class="metric-grid" aria-label="Payroll summary">
-      ${metric('Monthly net payroll', countable(totalPayroll()), `<em>${employees.length}</em> people included this month`, icon('trend'), 'payroll')}
-      ${metric('Active employees', countable(employees.length, 'pad'), `Across ${departmentCount()} departments`, icon('people'), 'people')}
+      ${metric('Monthly net payroll', countable(totalPayroll()), `<em>${activeEmployees().length}</em> people included this month`, icon('trend'), 'payroll')}
+      ${metric('Active employees', countable(activeEmployees().length, 'pad'), `Across ${departmentCount()} departments`, icon('people'), 'people')}
       ${metric('Average net salary', countable(averagePay()), 'Per employee, monthly', icon('pulse'), 'people')}
       ${metric('Next pay date', '30 Oct', 'October 2026 payroll', icon('clock'), 'payroll')}
     </section>
     <section class="dashboard-grid">
       <article class="panel"><div class="panel-head"><h2>Payroll at a glance</h2><span>Net pay · MAD</span></div><div class="panel-body"><div class="payroll-total"><strong>${countable(totalPayroll())}</strong><span>${escapeHtml(displayMonth(payrollMonth))}</span></div>${monthly.length ? `<div class="bar-chart" role="img" aria-label="Net payroll by month">${monthly.map((period, index) => `<div class="bar-column"><div class="bar ${period.month === payrollMonth ? 'current' : ''}" style="--i:${index};height:${Math.max(4, Math.round(period.total / maxMonthlyTotal * 100))}%" data-label="${escapeHtml(money(period.total))}"></div><span class="bar-label">${escapeHtml(new Date(`${period.month}-01T12:00:00`).toLocaleDateString('en-GB', { month: 'short' }))}</span></div>`).join('')}</div><div class="chart-key"><span class="key-dot"></span>Saved monthly net payroll</div>` : '<div class="empty-state">No payment history available.</div>'}</div></article>
-      <article class="next-run"><span class="eyebrow">Upcoming payroll</span><h3>October salary run</h3><p>Review the payroll totals before payday.</p><div class="run-detail"><span>Pay date</span><strong>30 OCT 2026</strong></div><div class="run-detail"><span>Employees</span><strong>${String(employees.length).padStart(2, '0')} PEOPLE</strong></div><div class="run-detail"><span>Net total</span><strong>${money(totalPayroll())}</strong></div></article>
+      <article class="next-run"><span class="eyebrow">Upcoming payroll</span><h3>October salary run</h3><p>Review the payroll totals before payday.</p><div class="run-detail"><span>Pay date</span><strong>30 OCT 2026</strong></div><div class="run-detail"><span>Employees</span><strong>${String(activeEmployees().length).padStart(2, '0')} PEOPLE</strong></div><div class="run-detail"><span>Net total</span><strong>${money(totalPayroll())}</strong></div></article>
     </section>
     <section class="panel table-panel"><div class="panel-head"><h2>People in this payroll</h2><button class="row-action" type="button" data-view="people">All employees →</button></div>${employeeTable(recent)}</section>`;
 }
@@ -478,8 +495,8 @@ function overview() {
 function people() {
   const rows = employees.filter((person) => `${person.name} ${person.role} ${person.department}`.toLowerCase().includes(employeeSearch.toLowerCase()));
   const peopleActions = `<button class="primary-button" type="button" data-add-employee>＋ Add employee</button><button class="secondary-button" type="button" data-print-report="employees">Print list</button><button class="secondary-button" type="button" data-export>Export CSV ↓</button>`;
-  return `${pageHead('Employees', `${employees.length} employees in the company.`, peopleActions)}${illustrativeBanner()}
-    <section class="metric-grid">${metric('Total headcount', countable(employees.length, 'pad'), 'Active employee records', icon('people'))}${metric('Departments', countable(departmentCount(), 'pad'), 'Across the company', icon('building'))}${metric('Monthly net payroll', countable(totalPayroll()), 'All listed employees', icon('trend'))}${metric('Average net pay', countable(averagePay()), 'Per month', icon('pulse'))}</section>
+  return `${pageHead('Employees', `${activeEmployees().length} active · ${employees.length - activeEmployees().length} inactive employees.`, peopleActions)}${illustrativeBanner()}
+    <section class="metric-grid">${metric('Total headcount', countable(activeEmployees().length, 'pad'), 'Active employee records', icon('people'))}${metric('Departments', countable(departmentCount(), 'pad'), 'Across the company', icon('building'))}${metric('Monthly net payroll', countable(totalPayroll()), 'All listed employees', icon('trend'))}${metric('Average net pay', countable(averagePay()), 'Per month', icon('pulse'))}</section>
     <section class="panel table-panel"><div class="panel-head"><h2>Employee directory</h2><div class="table-tools"><input class="search-input" type="search" placeholder="Search employees" aria-label="Search employees" value="${escapeHtml(employeeSearch)}" /><span>${rows.length} records</span></div></div>${employeeTable(rows, true, true)}</section>`;
 }
 
@@ -517,10 +534,10 @@ function employeeDetailsView() {
   const attendance = attendanceByMonth.filter((record) => record.employeeId === person.id);
   const paymentRows = payments.map((payment) => `<tr><td>${escapeHtml(displayMonth(payment.month))}</td><td>${escapeHtml(displayDate(payment.payDate))}</td><td>${payment.paidDays}</td><td class="money">${moneyPrecise(payment.dailyRate)}</td><td class="money">${money(payment.gross)}</td><td class="money">${money(payment.avance)}</td><td class="money"><strong>${money(payment.net)}</strong></td><td><span class="status ${payment.status === 'unpaid' ? 'status-pending' : ''}">${payment.status === 'paid' ? 'Paid' : 'Unpaid'}</span></td></tr>`).join('');
   const attendanceRows = attendance.map((record) => `<tr><td>${escapeHtml(displayMonth(record.month))}</td><td>${record.daysWorked}</td><td>${record.daysAbsent}</td><td>${record.daysRecorded}</td></tr>`).join('');
-  const actions = `<button class="secondary-button" type="button" data-view="people">← Employee directory</button><button class="secondary-button" type="button" data-edit-person="${escapeHtml(person.id)}">Edit employee</button><button class="secondary-button danger-button" type="button" data-delete-person="${escapeHtml(person.id)}">Delete employee</button>`;
+  const actions = `<button class="secondary-button" type="button" data-view="people">← Employee directory</button><button class="secondary-button" type="button" data-edit-person="${escapeHtml(person.id)}">Edit employee</button><button class="secondary-button" type="button" data-toggle-employee-status="${escapeHtml(person.id)}" aria-pressed="${person.active === false}">${person.active === false ? 'Reactivate employee' : 'Mark inactive'}</button><button class="secondary-button danger-button" type="button" data-delete-person="${escapeHtml(person.id)}">Delete employee</button>`;
   return `${pageHead(escapeHtml(person.name), `${escapeHtml(person.role)} · ${escapeHtml(person.department)}`, actions)}${illustrativeBanner()}
     <section class="employee-summary">
-      <article class="employee-id-card"><div class="person-cell"><span class="avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(initials(person.name))}</span><div><strong>${escapeHtml(person.name)}</strong><small>${escapeHtml(person.role)}</small></div></div><div class="profile-grid"><div class="info-pair"><span>Employee ID</span><strong>${escapeHtml(person.id)}</strong></div><div class="info-pair"><span>Department</span><strong>${escapeHtml(person.department)}</strong></div><div class="info-pair"><span>Phone</span><strong>${escapeHtml(person.phone || 'Not provided')}</strong></div><div class="info-pair"><span>Email</span><strong>${escapeHtml(person.email || 'Not provided')}</strong></div><div class="info-pair"><span>Start date</span><strong>${escapeHtml(displayStartMonth(person.startDate))}</strong></div><div class="info-pair"><span>Account</span><strong>${person.hasPassword ? 'Ready' : 'Setup needed'}</strong></div><div class="info-pair"><span>Username</span><strong>${escapeHtml(person.username || 'Not set')}</strong></div></div></article>
+      <article class="employee-id-card"><div class="person-cell"><span class="avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(initials(person.name))}</span><div><strong>${escapeHtml(person.name)}</strong><small>${escapeHtml(person.role)}</small></div></div><div class="profile-grid"><div class="info-pair"><span>Employee ID</span><strong>${escapeHtml(person.id)}</strong></div><div class="info-pair"><span>Department</span><strong>${escapeHtml(person.department)}</strong></div><div class="info-pair"><span>Phone</span><strong>${escapeHtml(person.phone || 'Not provided')}</strong></div><div class="info-pair"><span>Email</span><strong>${escapeHtml(person.email || 'Not provided')}</strong></div><div class="info-pair"><span>Start date</span><strong>${escapeHtml(displayStartMonth(person.startDate))}</strong></div><div class="info-pair"><span>Account</span><strong>${person.hasPassword ? 'Ready' : 'Setup needed'}</strong></div><div class="info-pair"><span>Username</span><strong>${escapeHtml(person.username || 'Not set')}</strong></div><div class="info-pair"><span>Status</span><strong>${person.active === false ? `Inactive since ${escapeHtml(displayDate(person.inactiveSince))}` : person.inactiveSince ? `Active until ${escapeHtml(displayDate(person.inactiveSince))}` : 'Active'}</strong></div></div></article>
       <article class="net-card"><div><span class="eyebrow">${escapeHtml(displayMonth(payrollMonth))} net pay</span><h2>${currentNet === null ? '—' : countable(currentNet)}</h2><p>${currentPayroll?.source === 'snapshot' ? 'Saved payroll record' : currentPayroll?.source === 'attendance' ? 'Attendance-based estimate' : 'No payroll data for this month'}</p></div><div class="net-meta"><div><span>Rate per day</span><strong>${currentPayroll ? moneyPrecise(currentPayroll.dailyRate) : '—'}</strong></div><div><span>Days worked</span><strong>${currentPayroll?.paidDays ?? '—'}</strong></div><div><span>Gross pay</span><strong>${currentPayroll?.gross == null ? '—' : money(currentPayroll.gross)}</strong></div></div></article>
     </section>
     <section class="panel table-panel"><div class="panel-head"><h2>Payment history</h2><span>${payments.length} records</span></div>${paymentRows ? `<div class="table-wrap"><table><thead><tr><th>Month</th><th>Pay date</th><th>Days</th><th>Rate / day</th><th>Gross</th><th>Avance</th><th>Net</th><th>Status</th></tr></thead><tbody>${paymentRows}</tbody></table></div>` : '<div class="empty-state">No payment history for this employee.</div>'}</section>
@@ -587,55 +604,43 @@ function paymentHistoryView() {
     </section>`;
 }
 
-function attendanceCalendar(record) {
-  const [year, month] = attendanceDate.split('-').map(Number);
-  const monthValue = `${year}-${String(month).padStart(2, '0')}`;
-  const weekdayOffset = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  const recordsByDay = new Map(attendanceMonthRecords
-    .filter((entry) => entry.employeeId === record.employeeId)
-    .map((entry) => [Number(entry.date.slice(-2)), entry]));
-  const blankDays = Array.from({ length: weekdayOffset }, () => '<span class="calendar-day empty" aria-hidden="true"></span>').join('');
-  const dayButtons = Array.from({ length: daysInMonth }, (_, index) => {
-    const day = index + 1;
-    const date = `${monthValue}-${String(day).padStart(2, '0')}`;
-    const dayStatus = recordsByDay.get(day)?.status || 'unmarked';
-    return `<button class="calendar-day ${dayStatus} ${date === attendanceDate ? 'selected' : ''}" type="button" data-attendance-calendar-date="${date}" aria-label="${escapeHtml(displayDate(date))}: ${dayStatus}" aria-pressed="${date === attendanceDate}">${day}</button>`;
-  }).join('');
-  const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
-    .map((day) => `<span class="calendar-weekday" aria-hidden="true">${day}</span>`).join('');
-  return `<div class="attendance-calendar" aria-label="Attendance calendar for ${escapeHtml(record.name)}">
-    <strong class="calendar-title">${escapeHtml(displayMonth(monthValue))}</strong>
-    <div class="calendar-grid">${weekdays}${blankDays}${dayButtons}</div>
-  </div>`;
+function attendanceTotals(records) {
+  const present = records.filter((entry) => entry.status === 'present').length;
+  return { present, absent: records.length - present };
 }
 
 function attendanceView() {
   const presentCount = attendanceRecords.filter((record) => record.status === 'present').length;
   const absentCount = attendanceRecords.filter((record) => record.status === 'absent').length;
-  const unmarkedCount = attendanceRecords.length - presentCount - absentCount;
+  const unmarkedCount = attendanceRecords.filter((record) => record.active !== false && !record.status).length;
+  const visibleIds = new Set(attendanceRecords.map((record) => record.employeeId));
+  const monthTotals = attendanceTotals(attendanceMonthRecords.filter((entry) => visibleIds.has(entry.employeeId)));
+  const monthLabel = displayMonth(attendanceDate.slice(0, 7));
   const rows = attendanceRecords.map((record) => {
     const status = record.status || 'unmarked';
+    const personTotals = attendanceTotals(attendanceMonthRecords.filter((entry) => entry.employeeId === record.employeeId));
     return `<tr ${employeeRowDetailsAttributes(record.employeeId, record.name)}>
-      <td><div class="person-cell"><span class="avatar" style="background:${escapeHtml(record.color)}">${escapeHtml(initials(record.name))}</span><div>${employeeNameLink(record.employeeId, record.name)}<small>${escapeHtml(record.employeeId)} · ${escapeHtml(record.department)}</small></div></div></td>
-      <td>${attendanceCalendar(record)}</td>
+      <td><div class="person-cell"><span class="avatar" style="background:${escapeHtml(record.color)}">${escapeHtml(initials(record.name))}</span><div>${employeeNameLink(record.employeeId, record.name)}<small>${escapeHtml(record.employeeId)} · ${escapeHtml(record.department)}${record.active === false ? ` · Inactive since ${escapeHtml(displayDate(record.inactiveSince))}` : ''}</small></div></div></td>
       <td><div class="attendance-actions" role="group" aria-label="Attendance for ${escapeHtml(record.name)}">
-        <button class="attendance-choice present ${status === 'present' ? 'active' : ''}" type="button" data-attendance-status="present" data-employee-id="${escapeHtml(record.employeeId)}" aria-pressed="${status === 'present'}">Present</button>
-        <button class="attendance-choice absent ${status === 'absent' ? 'active' : ''}" type="button" data-attendance-status="absent" data-employee-id="${escapeHtml(record.employeeId)}" aria-pressed="${status === 'absent'}">Absent</button>
+        <button class="attendance-choice present ${status === 'present' ? 'active' : ''}" type="button" data-attendance-status="present" data-employee-id="${escapeHtml(record.employeeId)}" aria-pressed="${status === 'present'}" ${record.active === false ? 'disabled' : ''}>Present</button>
+        <button class="attendance-choice absent ${status === 'absent' ? 'active' : ''}" type="button" data-attendance-status="absent" data-employee-id="${escapeHtml(record.employeeId)}" aria-pressed="${status === 'absent'}" ${record.active === false ? 'disabled' : ''}>Absent</button>
         ${status === 'absent' ? `<input class="absence-reason" type="text" data-absence-reason data-employee-id="${escapeHtml(record.employeeId)}" maxlength="200" value="${escapeHtml(record.absenceReason || '')}" placeholder="Reason for absence" aria-label="Reason for ${escapeHtml(record.name)}'s absence" />` : ''}
       </div></td>
+      <td><span class="attendance-month-stat"><strong>${personTotals.present}</strong> present · <strong>${personTotals.absent}</strong> absent</span></td>
+      <td><button class="row-action" type="button" data-attendance-history data-employee-id="${escapeHtml(record.employeeId)}" aria-haspopup="dialog" aria-label="View or edit past attendance for ${escapeHtml(record.name)}">Past days ▾</button></td>
     </tr>`;
   }).join('');
+  const today = dateInputValue(new Date());
   return `${pageHead('Attendance', 'Daily attendance records for the team.')}${illustrativeBanner()}
     <section class="attendance-summary" aria-label="Attendance totals">
-      <article><strong>${countable(presentCount, 'int')}</strong><span>Present</span></article>
-      <article><strong>${countable(absentCount, 'int')}</strong><span>Absent</span></article>
-      <article><strong>${countable(unmarkedCount, 'int')}</strong><span>Not marked</span></article>
+      <article><strong>${countable(presentCount, 'int')}</strong><span>Present on ${escapeHtml(displayDate(attendanceDate))}</span><small>${monthTotals.present} present days in ${escapeHtml(monthLabel)}</small></article>
+      <article><strong>${countable(absentCount, 'int')}</strong><span>Absent on ${escapeHtml(displayDate(attendanceDate))}</span><small>${monthTotals.absent} absent days in ${escapeHtml(monthLabel)}</small></article>
+      <article><strong>${countable(unmarkedCount, 'int')}</strong><span>Not marked on ${escapeHtml(displayDate(attendanceDate))}</span><small>${attendanceRecords.length} employees</small></article>
     </section>
     <section class="panel table-panel"><div class="panel-head"><h2>Employee attendance</h2><span>${attendanceRecords.length} employees</span></div>
-      <div class="attendance-toolbar"><div class="attendance-month-controls"><button class="month-step" type="button" data-attendance-month-shift="-1" aria-label="Previous month" title="Previous month">‹</button><strong>${escapeHtml(displayMonth(attendanceDate.slice(0, 7)))}</strong><button class="month-step" type="button" data-attendance-month-shift="1" aria-label="Next month" title="Next month">›</button></div><div class="attendance-legend"><span><i class="present"></i>Present</span><span><i class="absent"></i>Absent</span></div></div>
-      ${attendanceError ? `<div class="empty-state" role="alert">${escapeHtml(attendanceError)}</div>` : rows ? `<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Attendance calendar</th><th>Mark attendance</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-state">No employees are available.</div>'}
-      <div class="panel-body"><p class="notice-line">Attendance is recorded manually for the selected date. Payroll estimates use recorded attendance.</p></div>
+      <div class="attendance-toolbar"><div class="attendance-filter" role="group" aria-label="Filter employees by status">${[['all', 'All'], ['active', 'Active Only'], ['inactive', 'Inactive Only']].map(([value, label]) => `<button class="attendance-filter-button ${attendanceStatusFilter === value ? 'active' : ''}" type="button" data-attendance-filter="${value}" aria-pressed="${attendanceStatusFilter === value}">${label}</button>`).join('')}</div><div class="attendance-month-controls"><button class="month-step" type="button" data-attendance-day-shift="-1" aria-label="Previous day" title="Previous day">‹</button><label class="attendance-date-field"><span class="sr-only">Attendance date</span><input id="attendance-date" type="date" value="${escapeHtml(attendanceDate)}" required /></label><button class="month-step" type="button" data-attendance-day-shift="1" aria-label="Next day" title="Next day">›</button><button class="secondary-button" type="button" data-attendance-today ${attendanceDate === today ? 'disabled' : ''}>Today</button></div></div>
+      ${attendanceError ? `<div class="empty-state" role="alert">${escapeHtml(attendanceError)}</div>` : rows ? `<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Mark attendance</th><th>${escapeHtml(monthLabel)}</th><th><span class="sr-only">Past days</span></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty-state">No employees match this filter.</div>'}
+      <div class="panel-body"><p class="notice-line">Attendance is recorded manually for the selected date. Inactive employees are not required to be marked from their inactive date, and their past records are kept for payroll. Use Past days to review or correct an earlier date. Payroll estimates use recorded attendance.</p></div>
     </section>`;
 }
 
@@ -1095,6 +1100,20 @@ async function togglePaymentStatus(button) {
   }
 }
 
+function applyAttendanceResult(employeeId, date, result) {
+  const record = date === attendanceDate ? attendanceRecords.find((entry) => entry.employeeId === employeeId) : null;
+  if (record) {
+    record.status = result.status;
+    record.absenceReason = result.absenceReason;
+  }
+  if (date.slice(0, 7) === attendanceDate.slice(0, 7)) {
+    const monthRecord = attendanceMonthRecords.find((entry) => entry.employeeId === employeeId && entry.date === date);
+    if (monthRecord) monthRecord.status = result.status;
+    else attendanceMonthRecords.push({ employeeId, date, status: result.status });
+  }
+  return record;
+}
+
 async function setAttendanceStatus(button) {
   const { employeeId, attendanceStatus } = button.dataset;
   const absenceReason = attendanceStatus === 'absent'
@@ -1104,14 +1123,7 @@ async function setAttendanceStatus(button) {
     const result = await api(`/api/attendance/${encodeURIComponent(employeeId)}/${encodeURIComponent(attendanceDate)}`, {
       method: 'PUT', body: { status: attendanceStatus, absenceReason },
     });
-    const record = attendanceRecords.find((entry) => entry.employeeId === employeeId);
-    if (record) {
-      record.status = result.status;
-      record.absenceReason = result.absenceReason;
-    }
-    const calendarRecord = attendanceMonthRecords.find((entry) => entry.employeeId === employeeId && entry.date === attendanceDate);
-    if (calendarRecord) calendarRecord.status = result.status;
-    else attendanceMonthRecords.push({ employeeId, date: attendanceDate, status: result.status });
+    const record = applyAttendanceResult(employeeId, attendanceDate, result);
     renderApp();
     showSaveNotice(`${record?.name || 'Employee'} marked ${result.status}.`);
   } catch (error) {
@@ -1141,12 +1153,138 @@ async function changeAttendanceDate(date) {
   renderApp();
 }
 
-function changeAttendanceMonth(offset) {
+async function changeAttendanceFilter(filter) {
+  attendanceStatusFilter = filter;
+  await changeAttendanceDate(attendanceDate);
+}
+
+async function toggleEmployeeStatus(employeeId) {
+  const person = employees.find((employee) => employee.id === employeeId);
+  if (!person) return;
+  const active = person.active === false;
+  try {
+    const result = await api(`/api/employees/${encodeURIComponent(employeeId)}/status`, {
+      method: 'PUT', body: { active, inactiveSince: dateInputValue(new Date()) },
+    });
+    Object.assign(person, result.employee);
+    renderApp();
+    showSaveNotice(`${person.name} marked ${active ? 'active' : 'inactive'}.`);
+  } catch (error) {
+    showSaveNotice(error.message);
+  }
+}
+
+function shiftAttendanceDay(offset) {
   const [year, month, day] = attendanceDate.split('-').map(Number);
-  const targetMonth = new Date(Date.UTC(year, month - 1 + offset, 1));
-  const targetDay = Math.min(day, new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0)).getUTCDate());
-  const nextDate = new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth(), targetDay)).toISOString().slice(0, 10);
-  changeAttendanceDate(nextDate);
+  changeAttendanceDate(new Date(Date.UTC(year, month - 1, day + offset)).toISOString().slice(0, 10));
+}
+
+async function openAttendanceHistory(employeeId) {
+  const person = attendanceRecords.find((entry) => entry.employeeId === employeeId);
+  if (!person) return;
+  let month = attendanceDate.slice(0, 7);
+  let selected = attendanceDate;
+  let monthRecords = [];
+  let day = { status: null, absenceReason: '' };
+  let message = '';
+  const dialog = document.createElement('dialog');
+  dialog.className = 'edit-dialog attendance-history-dialog';
+  dialog.setAttribute('aria-labelledby', 'attendance-history-title');
+  document.body.append(dialog);
+
+  const load = async () => {
+    const [monthResult, dayResult] = await Promise.all([
+      api(`/api/attendance?date=${encodeURIComponent(`${month}-01`)}`),
+      api(`/api/attendance?date=${encodeURIComponent(selected)}`),
+    ]);
+    monthRecords = monthResult.monthAttendance.filter((entry) => entry.employeeId === employeeId);
+    const entry = dayResult.attendance.find((item) => item.employeeId === employeeId);
+    day = { status: entry?.status || null, absenceReason: entry?.absenceReason || '' };
+  };
+
+  const render = () => {
+    const [year, monthNumber] = month.split('-').map(Number);
+    const offset = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
+    const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+    const byDay = new Map(monthRecords.map((entry) => [Number(entry.date.slice(-2)), entry.status]));
+    const totals = attendanceTotals(monthRecords);
+    const weekdays = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((name) => `<span class="calendar-weekday" aria-hidden="true">${name}</span>`).join('');
+    const blanks = Array.from({ length: offset }, () => '<span class="calendar-day empty" aria-hidden="true"></span>').join('');
+    const buttons = Array.from({ length: daysInMonth }, (_, index) => {
+      const date = `${month}-${String(index + 1).padStart(2, '0')}`;
+      const status = byDay.get(index + 1) || 'unmarked';
+      return `<button class="calendar-day ${status} ${date === selected ? 'selected' : ''}" type="button" data-history-date="${date}" aria-label="${escapeHtml(displayDate(date))}: ${status}" aria-pressed="${date === selected}">${index + 1}</button>`;
+    }).join('');
+    dialog.innerHTML = `<div class="edit-form">
+      <header class="edit-header"><div><span class="eyebrow">Past attendance</span><h2 id="attendance-history-title">${escapeHtml(person.name)}</h2><p>${escapeHtml(person.employeeId)} · ${escapeHtml(person.department)}</p></div><button class="icon-button" type="button" data-close-edit aria-label="Close" title="Close">×</button></header>
+      <div class="attendance-history-body">
+        <div>
+          <div class="attendance-month-controls"><button class="month-step" type="button" data-history-month="-1" aria-label="Previous month" title="Previous month">‹</button><strong>${escapeHtml(displayMonth(month))}</strong><button class="month-step" type="button" data-history-month="1" aria-label="Next month" title="Next month">›</button></div>
+          <div class="attendance-calendar"><div class="calendar-grid">${weekdays}${blanks}${buttons}</div></div>
+          <p class="attendance-history-totals"><strong>${totals.present}</strong> present · <strong>${totals.absent}</strong> absent this month</p>
+        </div>
+        <div class="attendance-history-day">
+          <strong>${escapeHtml(displayDate(selected))}</strong>
+          <span class="attendance-state ${day.status || 'unmarked'}">${day.status === 'present' ? 'Present' : day.status === 'absent' ? 'Absent' : 'Not marked'}</span>
+          <div class="attendance-actions" role="group" aria-label="Attendance for ${escapeHtml(displayDate(selected))}">
+            <button class="attendance-choice present ${day.status === 'present' ? 'active' : ''}" type="button" data-history-status="present" aria-pressed="${day.status === 'present'}">Present</button>
+            <button class="attendance-choice absent ${day.status === 'absent' ? 'active' : ''}" type="button" data-history-status="absent" aria-pressed="${day.status === 'absent'}">Absent</button>
+          </div>
+          ${day.status === 'absent' ? `<input class="absence-reason" type="text" data-history-reason maxlength="200" value="${escapeHtml(day.absenceReason)}" placeholder="Reason for absence" aria-label="Reason for absence on ${escapeHtml(displayDate(selected))}" />` : ''}
+        </div>
+      </div>
+      <p class="editor-error" role="alert">${escapeHtml(message)}</p>
+      <footer class="edit-footer"><button class="secondary-button" type="button" data-close-edit>Done</button></footer>
+    </div>`;
+  };
+
+  const run = async (action) => {
+    message = '';
+    try { await action(); } catch (error) { message = error.message; }
+    render();
+  };
+
+  const save = (status, absenceReason) => run(async () => {
+    const result = await api(`/api/attendance/${encodeURIComponent(employeeId)}/${encodeURIComponent(selected)}`, {
+      method: 'PUT', body: { status, absenceReason },
+    });
+    day = { status: result.status, absenceReason: result.absenceReason };
+    const existing = monthRecords.find((entry) => entry.date === selected);
+    if (existing) existing.status = result.status;
+    else monthRecords.push({ employeeId, date: selected, status: result.status });
+    applyAttendanceResult(employeeId, selected, result);
+    renderApp();
+  });
+
+  dialog.addEventListener('click', (event) => {
+    if (event.target.closest('[data-close-edit]')) return dialog.close();
+    const dateButton = event.target.closest('[data-history-date]');
+    if (dateButton) {
+      selected = dateButton.dataset.historyDate;
+      return run(load);
+    }
+    const monthButton = event.target.closest('[data-history-month]');
+    if (monthButton) {
+      const [year, monthNumber] = month.split('-').map(Number);
+      const target = new Date(Date.UTC(year, monthNumber - 1 + Number(monthButton.dataset.historyMonth), 1));
+      month = target.toISOString().slice(0, 7);
+      const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+      selected = `${month}-${String(Math.min(Number(selected.slice(-2)), lastDay)).padStart(2, '0')}`;
+      return run(load);
+    }
+    const statusButton = event.target.closest('[data-history-status]');
+    if (statusButton) {
+      const status = statusButton.dataset.historyStatus;
+      save(status, status === 'absent' && day.status === 'absent' ? day.absenceReason : '');
+    }
+  });
+  dialog.addEventListener('change', (event) => {
+    if (event.target.matches('[data-history-reason]')) save('absent', event.target.value);
+  });
+  dialog.addEventListener('close', () => dialog.remove());
+  render();
+  dialog.showModal();
+  await run(load);
 }
 
 function renderApp() {
@@ -1242,8 +1380,14 @@ function renderApp() {
   }));
   document.querySelectorAll('[data-attendance-status]').forEach((button) => button.addEventListener('click', () => setAttendanceStatus(button)));
   document.querySelectorAll('[data-absence-reason]').forEach((input) => input.addEventListener('change', () => saveAbsenceReason(input)));
-  document.querySelectorAll('[data-attendance-calendar-date]').forEach((button) => button.addEventListener('click', () => changeAttendanceDate(button.dataset.attendanceCalendarDate)));
-  document.querySelectorAll('[data-attendance-month-shift]').forEach((button) => button.addEventListener('click', () => changeAttendanceMonth(Number(button.dataset.attendanceMonthShift))));
+  document.querySelectorAll('[data-attendance-history]').forEach((button) => button.addEventListener('click', () => openAttendanceHistory(button.dataset.employeeId)));
+  document.querySelectorAll('[data-attendance-filter]').forEach((button) => button.addEventListener('click', () => changeAttendanceFilter(button.dataset.attendanceFilter)));
+  document.querySelectorAll('[data-toggle-employee-status]').forEach((button) => button.addEventListener('click', () => toggleEmployeeStatus(button.dataset.toggleEmployeeStatus)));
+  document.querySelectorAll('[data-attendance-day-shift]').forEach((button) => button.addEventListener('click', () => shiftAttendanceDay(Number(button.dataset.attendanceDayShift))));
+  document.querySelector('[data-attendance-today]')?.addEventListener('click', () => changeAttendanceDate(dateInputValue(new Date())));
+  document.querySelector('#attendance-date')?.addEventListener('change', (event) => {
+    if (event.currentTarget.value) changeAttendanceDate(event.currentTarget.value);
+  });
   document.querySelector('#payroll-month')?.addEventListener('change', (event) => {
     payrollMonth = event.currentTarget.value;
     renderApp();
@@ -1305,6 +1449,7 @@ function exportPayroll() {
 }
 
 async function initializeApp() {
+  await loadLogo();
   document.addEventListener('pointermove', (event) => {
     const card = event.target.closest?.('.metric, .home-pillars article, .next-run, .net-card');
     if (!card) return;

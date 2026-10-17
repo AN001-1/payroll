@@ -616,8 +616,13 @@ select {
 .sidebar > * { position: relative; z-index: 1; }
 .sidebar .brand { display: flex; width: 100%; padding: 0 8px 30px; font-size: 11px; }
 .brand-link { display: inline-flex; align-items: center; gap: 12px; min-width: 0; border-radius: 12px; color: inherit; text-decoration: none; cursor: pointer; }
-.brand-logo { display: block; flex: none; width: 46px; height: auto; border: 0; background: none; box-shadow: none; }
+.brand-logo { display: block; flex: none; width: 46px; height: auto; border: 0; background: none; box-shadow: none; overflow: visible; }
 .sidebar .brand-logo { width: 42px; }
+.logo-blades { transform-box: view-box; transform-origin: 217.5px 148.6px; transition: transform 1.4s cubic-bezier(.45, .05, .2, 1); will-change: transform; }
+.logo-base { transform-box: fill-box; transform-origin: center; transition: transform .7s var(--ease), opacity .7s var(--ease); will-change: transform; }
+.brand-link:is(:hover, :focus-visible) .logo-blades, .home-brand:is(:hover, :focus-visible) .logo-blades { transform: rotate(360deg); }
+.brand-link:is(:hover, :focus-visible) .logo-base, .home-brand:is(:hover, :focus-visible) .logo-base { transform: scaleX(1.08); opacity: .75; }
+@media (prefers-reduced-motion: reduce) { .logo-blades, .logo-base { transition: none; } .brand-link:is(:hover, :focus-visible) .logo-blades, .home-brand:is(:hover, :focus-visible) .logo-blades { transform: none; } }
 .sidebar .brand-link > span:nth-child(2) { min-width: 0; }
 .sidebar-profile-link { display: grid; flex: none; border-radius: 50%; cursor: pointer; }
 .sidebar-profile-link .avatar { transition: box-shadow .2s var(--ease), transform .3s var(--ease-spring); }
@@ -989,6 +994,31 @@ button.calendar-day:hover { z-index: 1; border-color: var(--brand); transform: s
 .attendance-choice.present.active::before { background: var(--on-brand); transform: scale(1.2); }
 .attendance-choice.absent.active::before { background: var(--ink); transform: scale(1.2); }
 .absence-reason { width: 200px; height: 36px; padding: 0 12px; border-radius: 10px; font-size: 13px; animation: popIn .35s var(--ease-spring) both; }
+.attendance-summary small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.attendance-filter { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.attendance-filter-button { min-height: 32px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; transition: background-color .2s var(--ease), color .2s var(--ease); }
+.attendance-filter-button:hover { color: var(--ink); }
+.attendance-filter-button.active { background: var(--ink); color: var(--surface); }
+.attendance-choice:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.attendance-date-field input { height: 38px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; }
+.attendance-toolbar .secondary-button { min-height: 38px; margin-left: 6px; }
+.attendance-month-stat { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.attendance-month-stat strong { color: var(--ink); }
+.attendance-history-dialog { width: min(640px, calc(100vw - 32px)); }
+.attendance-history-body { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 28px; padding: 22px 0 6px; }
+.attendance-history-body .attendance-month-controls { justify-content: space-between; margin-bottom: 12px; }
+.attendance-history-body .attendance-month-controls strong { min-width: 0; font-size: 14px; }
+.attendance-history-body .attendance-calendar { width: auto; }
+.attendance-history-totals { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+.attendance-history-totals strong { color: var(--ink); }
+.attendance-history-day { display: grid; align-content: start; gap: 12px; }
+.attendance-history-day > strong { font: 500 18px/1.2 var(--font-display); }
+.attendance-history-day .attendance-actions { padding: 0; }
+.attendance-history-day .absence-reason { width: 100%; }
+.attendance-state { width: fit-content; padding: 4px 10px; border-radius: 999px; background: var(--surface-3); color: var(--muted); font-size: 12px; font-weight: 600; }
+.attendance-state.present { background: var(--success-soft); color: var(--success-ink); }
+.attendance-state.absent { background: var(--danger-soft); color: var(--danger-ink); }
+@media (max-width: 700px) { .attendance-history-body { grid-template-columns: 1fr; } }
 
 /* ---------- Employee detail / payslip ---------- */
 .employee-summary { display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px; margin-bottom: 16px; }
